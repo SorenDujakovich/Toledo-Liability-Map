@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toledo, OH — Split Rate Tax Liability by ZIP Code</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f4f1ea; --paper:#fbf9f3; --ink:#1a1a1a;
+  --muted:#6e6862; --line:#d8d2c3;
+  --green:#2a7a4a; --red:#a83232; --neutral:#555e72;
+}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:var(--bg); color:var(--ink);
+  min-height:100vh; padding:30px 20px;
+}
+.page{
+  max-width:1100px; margin:0 auto;
+  background:var(--paper); padding:38px 44px;
+  border:1px solid var(--line);
+  box-shadow:0 2px 20px rgba(0,0,0,0.06);
+}
+.eyebrow{
+  font-size:11px; letter-spacing:0.18em; text-transform:uppercase;
+  color:var(--red); font-weight:600; margin-bottom:14px;
+}
+h1{
+  font-family:'Playfair Display',serif;
+  font-weight:900; font-size:42px;
+  line-height:1.1; letter-spacing:-0.01em; margin-bottom:8px;
+}
+.subtitle{ font-size:16px; color:var(--muted); margin-bottom:6px; }
+.meta{
+  font-size:12px; color:var(--muted);
+  padding-bottom:24px; border-bottom:1px solid var(--line); margin-bottom:24px;
+}
+
+/* ── Stats strip ── */
+.stats-strip{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+  margin-bottom:28px; border:1px solid var(--line); background:#fff;
+}
+.stat{ padding:16px 18px; border-right:1px solid var(--line); }
+.stat:last-child{border-right:none}
+.stat-label{
+  font-size:10px; letter-spacing:0.12em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:6px; font-weight:600;
+}
+.stat-val{
+  font-family:'Playfair Display',serif;
+  font-size:24px; font-weight:700; color:var(--ink);
+}
+.stat-val.green{color:var(--green)}.stat-val.red{color:var(--red)}
+.stat-val small{font-size:13px; color:var(--muted); font-weight:400; font-family:'Inter',sans-serif}
+
+/* ── Map ── */
+.map-section{
+  display:grid; grid-template-columns:1fr 290px; gap:0;
+  border:1px solid var(--line); margin-bottom:32px;
+}
+#map{ height:540px; background:#e8e4d8; }
+.legend-panel{
+  background:#fff; border-left:1px solid var(--line);
+  padding:22px; display:flex; flex-direction:column; gap:16px;
+}
+.legend-title{
+  font-family:'Playfair Display',serif;
+  font-size:18px; font-weight:700;
+  border-bottom:1px solid var(--line); padding-bottom:10px;
+}
+.legend-sub{ font-size:11px; color:var(--muted); }
+
+/* Gradient scale */
+.grad-wrap{ border:1px solid var(--line); }
+.grad-bar{
+  height:20px;
+  background: linear-gradient(to right, #2a7a4a, #74c28a, #d8d8d8, #e87070, #a83232);
+}
+.grad-labels{
+  display:flex; justify-content:space-between;
+  padding:4px 8px; font-size:10px; font-variant-numeric:tabular-nums;
+  color:var(--muted); font-weight:500;
+}
+
+/* Stepped legend */
+.lscale{ display:flex; flex-direction:column; border:1px solid var(--line); }
+.lscale-row{ display:flex; align-items:center; border-bottom:1px solid var(--line); }
+.lscale-row:last-child{border-bottom:none}
+.lswatch{ width:36px; height:30px; flex-shrink:0; border-right:1px solid var(--line); }
+.lscale-text{ padding:5px 10px; font-size:11px; font-weight:500; flex:1; }
+
+.callout{
+  font-size:11px; line-height:1.6; color:var(--muted);
+  padding:12px 14px; border-left:3px solid var(--line);
+  background:rgba(0,0,0,0.02);
+}
+.callout strong{color:var(--ink); font-weight:600}
+.callout.green-call{border-left-color:var(--green); background:rgba(42,122,74,0.04)}
+.callout.red-call{border-left-color:var(--red); background:rgba(168,50,50,0.04)}
+
+/* ── Table ── */
+.section-title{
+  font-family:'Playfair Display',serif;
+  font-size:22px; font-weight:700; margin-bottom:8px;
+}
+.section-desc{ font-size:13px; color:var(--muted); margin-bottom:16px; }
+table.zip-table{
+  width:100%; border-collapse:collapse;
+  background:#fff; font-size:13px; border:1px solid var(--line);
+}
+table.zip-table th{
+  text-align:left; padding:10px 14px;
+  font-size:10px; letter-spacing:0.1em;
+  text-transform:uppercase; color:var(--muted);
+  background:#f9f7f0; border-bottom:1px solid var(--line); font-weight:600;
+}
+table.zip-table td{
+  padding:11px 14px; border-bottom:1px solid var(--line);
+  font-variant-numeric:tabular-nums;
+}
+table.zip-table tr:last-child td{border-bottom:none}
+table.zip-table tr:hover{background:#faf8f1}
+.zip-tile{
+  display:inline-block; width:11px; height:11px;
+  margin-right:8px; vertical-align:middle;
+  border:1px solid rgba(0,0,0,0.1);
+}
+
+/* outcome bar */
+.outcome-bar{
+  display:flex; height:8px; width:100%; min-width:80px;
+  border-radius:2px; overflow:hidden;
+}
+.ob-more{ background:#e85a4a; }
+.ob-less{ background:#3ecf82; }
+.ob-same{ background:#c8ccda; }
+
+.badge{
+  display:inline-block; padding:2px 8px;
+  font-size:10px; font-weight:600; border-radius:2px;
+  font-family:'Inter',sans-serif;
+}
+.badge.green{background:rgba(42,122,74,0.12); color:var(--green)}
+.badge.red{background:rgba(168,50,50,0.12); color:var(--red)}
+.badge.neutral{background:rgba(85,94,114,0.1); color:var(--neutral)}
+
+.footer-note{
+  margin-top:28px; padding-top:18px;
+  border-top:1px solid var(--line);
+  font-size:11px; color:var(--muted); line-height:1.7;
+}
+
+#map-loading{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  background:#e8e4d8; color:var(--muted); font-size:13px;
+  pointer-events:none;
+}
+#map-loading.hidden{display:none}
+
+@media(max-width:780px){
+  .stats-strip{grid-template-columns:1fr 1fr}
+  .stat:nth-child(2){border-right:none}
+  .stat:nth-child(1),.stat:nth-child(2){border-bottom:1px solid var(--line)}
+  .map-section{grid-template-columns:1fr}
+  .legend-panel{border-left:none;border-top:1px solid var(--line)}
+  h1{font-size:30px}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="eyebrow">Split Rate Tax Analysis · Lucas County Parcel Data</div>
+  <h1>Toledo, Ohio<br/>Split Rate Tax Liability by ZIP</h1>
+  <p class="subtitle">Median per-parcel tax liability change under a split-rate land value tax — green means lower taxes, red means higher taxes.</p>
+  <p class="meta">Source: Lucas County Auditor parcel assessments · 137,000+ parcels · Liability = Split Rate Tax − Uniform Tax</p>
+
+  <div class="stats-strip">
+    <div class="stat">
+      <div class="stat-label">Most Burdened ZIP</div>
+      <div class="stat-val red">43614 <small>($+9.87)</small></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Most Relieved ZIP</div>
+      <div class="stat-val green">43623 <small>(−$12.93)</small></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">City-Wide % Pay More</div>
+      <div class="stat-val red">50.3<small>%</small></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">City-Wide % Pay Less</div>
+      <div class="stat-val green">36.9<small>%</small></div>
+    </div>
+  </div>
+
+  <div class="map-section">
+    <div style="position:relative">
+      <div id="map"></div>
+      <div id="map-loading">Loading ZIP code boundaries…</div>
+    </div>
+
+    <div class="legend-panel">
+      <div>
+        <div class="legend-title">Tax Liability Change</div>
+        <div class="legend-sub">Median per-parcel change (Split Rate minus Uniform)</div>
+      </div>
+
+      <div class="grad-wrap">
+        <div class="grad-bar"></div>
+        <div class="grad-labels">
+          <span style="color:var(--green)">Pays Less</span>
+          <span>Neutral</span>
+          <span style="color:var(--red)">Pays More</span>
+        </div>
+      </div>
+
+      <div class="lscale">
+        <div class="lscale-row"><div class="lswatch" style="background:#2a7a4a"></div><div class="lscale-text">Under −$10 (large benefit)</div></div>
+        <div class="lscale-row"><div class="lswatch" style="background:#74c28a"></div><div class="lscale-text">−$10 to −$1 (modest benefit)</div></div>
+        <div class="lscale-row"><div class="lswatch" style="background:#c8d8c0"></div><div class="lscale-text">−$1 to $0 (near neutral −)</div></div>
+        <div class="lscale-row"><div class="lswatch" style="background:#e8c8a0"></div><div class="lscale-text">$0 to +$1 (near neutral +)</div></div>
+        <div class="lscale-row"><div class="lswatch" style="background:#e87070"></div><div class="lscale-text">+$1 to +$10 (modest burden)</div></div>
+        <div class="lscale-row"><div class="lswatch" style="background:#a83232"></div><div class="lscale-text">Over +$10 (high burden)</div></div>
+      </div>
+
+      <div class="callout green-call">
+        <strong>Who benefits:</strong> Land-heavy parcels — vacant lots, parking, and underdeveloped land — pay less under split rate. Highest-value neighbourhoods like 43623 tend to have large lots relative to structures.
+      </div>
+      <div class="callout red-call" style="margin-top:4px">
+        <strong>Who pays more:</strong> Building-heavy parcels — dense residential and commercial — bear more burden. Suburban ZIPs like 43614 with high building-to-land ratios see the largest increases.
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">ZIP-Level Detail</div>
+  <p class="section-desc">All Toledo ZIPs ranked by median tax liability change. The bar shows the share of parcels paying more (red), less (green), or the same (grey).</p>
+
+  <table class="zip-table">
+    <thead>
+      <tr>
+        <th>ZIP</th>
+        <th>Area</th>
+        <th>Parcels</th>
+        <th>Median Liability</th>
+        <th>Parcel Breakdown</th>
+        <th>Dominant Outcome</th>
+      </tr>
+    </thead>
+    <tbody id="zip-tbody"></tbody>
+  </table>
+
+  <p class="footer-note">
+    Liability is defined as the difference between the proposed split-rate tax and the current uniform millage rate (Split Rate − Uniform). A positive value means a parcel owner pays more under the new system; negative means they pay less. Medians computed across all parcels binned to each ZIP code by coordinate. Data: Lucas County Auditor parcel file. ZIP boundaries: U.S. Census TIGER cartographic boundary files via OpenDataDE.
+  </p>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const ZIPS = {
+  '43604': {name:'Downtown Toledo',     count:3409,  liab:0.00,   pct_more:9.4,  pct_less:10.7, pct_same:79.9, uniform:0,    split:0},
+  '43605': {name:'East Toledo',         count:9598,  liab:3.84,   pct_more:64.4, pct_less:18.8, pct_same:16.8, uniform:0,    split:0},
+  '43606': {name:'Old West End / Univ', count:6530,  liab:0.00,   pct_more:44.5, pct_less:45.1, pct_same:10.4, uniform:0,    split:0},
+  '43607': {name:'West Toledo',         count:13435, liab:0.74,   pct_more:50.9, pct_less:36.4, pct_same:12.7, uniform:0,    split:0},
+  '43608': {name:'North Toledo',        count:10469, liab:0.00,   pct_more:46.6, pct_less:41.3, pct_same:12.1, uniform:0,    split:0},
+  '43609': {name:'South Toledo',        count:9114,  liab:1.00,   pct_more:52.8, pct_less:27.6, pct_same:19.5, uniform:0,    split:0},
+  '43610': {name:'Vistula / North End', count:8059,  liab:0.00,   pct_more:41.0, pct_less:45.1, pct_same:13.9, uniform:0,    split:0},
+  '43611': {name:'Point Place',         count:4562,  liab:5.29,   pct_more:59.1, pct_less:34.9, pct_same:5.9,  uniform:0,    split:0},
+  '43612': {name:'North Toledo',        count:14684, liab:1.69,   pct_more:54.3, pct_less:35.3, pct_same:10.4, uniform:0,    split:0},
+  '43613': {name:'West Toledo / Trilby',count:20612, liab:0.00,   pct_more:42.3, pct_less:49.2, pct_same:8.5,  uniform:0,    split:0},
+  '43614': {name:'Reynolds Corners',    count:14962, liab:9.87,   pct_more:63.6, pct_less:25.0, pct_same:11.3, uniform:0,    split:0},
+  '43615': {name:'West Toledo',         count:13714, liab:0.00,   pct_more:49.9, pct_less:41.0, pct_same:9.2,  uniform:0,    split:0},
+  '43620': {name:'Old West End',        count:3164,  liab:0.00,   pct_more:37.1, pct_less:47.8, pct_same:15.0, uniform:0,    split:0},
+  '43623': {name:'Ottawa Hills border', count:4272,  liab:-12.93, pct_more:35.3, pct_less:55.9, pct_same:8.7,  uniform:0,    split:0},
+};
+
+function getColor(liab) {
+  if (liab < -10)  return '#2a7a4a';
+  if (liab < -1)   return '#74c28a';
+  if (liab < 0)    return '#c8d8c0';
+  if (liab < 1)    return '#e8c8a0';
+  if (liab < 10)   return '#e87070';
+  return '#a83232';
+}
+
+function fmtLiab(l) {
+  const sign = l >= 0 ? '+' : '−';
+  return sign + '$' + Math.abs(l).toFixed(2);
+}
+
+function dominant(d) {
+  if (d.pct_less > d.pct_more && d.pct_less > d.pct_same)
+    return {label:'Mostly Pays Less', cls:'green'};
+  if (d.pct_more > d.pct_less && d.pct_more > d.pct_same)
+    return {label:'Mostly Pays More', cls:'red'};
+  return {label:'Mixed / Neutral', cls:'neutral'};
+}
+
+// Map
+const map = L.map('map', {
+  center:[41.665,-83.575], zoom:11,
+  scrollWheelZoom:false
+});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:18
+}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+  subdomains:'abcd', maxZoom:18, pane:'shadowPane'
+}).addTo(map);
+
+const ZIP_URL = 'https://raw.githubusercontent.com/OpenDataDE/State-zip-code-GeoJSON/master/oh_ohio_zip_codes_geo.min.json';
+
+async function loadMap() {
+  try {
+    const r = await fetch(ZIP_URL);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const all = await r.json();
+    const ourZips = new Set(Object.keys(ZIPS));
+    const filtered = {
+      type:'FeatureCollection',
+      features: all.features.filter(f => ourZips.has(f.properties.ZCTA5CE10))
+    };
+    document.getElementById('map-loading').classList.add('hidden');
+
+    const layer = L.geoJSON(filtered, {
+      style: f => {
+        const d = ZIPS[f.properties.ZCTA5CE10];
+        return {
+          fillColor: d ? getColor(d.liab) : '#ddd',
+          fillOpacity: 0.85, color:'#fff', weight:1.5
+        };
+      },
+      onEachFeature: (f, lyr) => {
+        const zip = f.properties.ZCTA5CE10;
+        const d = ZIPS[zip];
+        if (!d) return;
+        const center = lyr.getBounds().getCenter();
+        const liabColor = d.liab < -0.01 ? '#2a7a4a' : d.liab > 0.01 ? '#a83232' : '#6e6862';
+
+        L.marker(center, {
+          icon: L.divIcon({
+            className:'zip-label',
+            html:`<div style="
+              font-family:'Inter',sans-serif;font-size:10px;font-weight:600;
+              color:#1a1a1a;background:rgba(255,255,255,0.9);
+              padding:2px 6px;border-radius:2px;white-space:nowrap;
+              text-align:center;line-height:1.4;
+              box-shadow:0 1px 3px rgba(0,0,0,0.18);
+            ">
+              ${zip}<br/>
+              <span style="font-size:9px;color:${liabColor};font-weight:600">${fmtLiab(d.liab)}</span>
+            </div>`,
+            iconSize:[64,28], iconAnchor:[32,14]
+          }),
+          interactive:false
+        }).addTo(map);
+
+        lyr.on('mouseover', () => lyr.setStyle({weight:3,color:'#1a1a1a'}));
+        lyr.on('mouseout',  () => layer.resetStyle(lyr));
+        lyr.bindTooltip(`
+          <strong style="font-family:'Playfair Display',serif;font-size:14px">ZIP ${zip}</strong><br/>
+          <span style="color:#666">${d.name}</span><br/>
+          <strong style="color:${liabColor};font-size:15px">${fmtLiab(d.liab)}</strong>
+          <span style="color:#999;font-size:11px"> median liability</span><br/>
+          <div style="margin-top:5px;font-size:11px;line-height:1.8">
+            🔴 Pay more: <strong>${d.pct_more}%</strong><br/>
+            🟢 Pay less: <strong>${d.pct_less}%</strong><br/>
+            ⚫ No change: <strong>${d.pct_same}%</strong>
+          </div>
+        `, {sticky:true, direction:'top'});
+      }
+    }).addTo(map);
+    map.fitBounds(layer.getBounds(), {padding:[20,20]});
+  } catch(e) {
+    document.getElementById('map-loading').innerHTML =
+      'Could not load ZIP boundaries — ' + e.message;
+  }
+}
+
+// Table
+const sorted = Object.entries(ZIPS).sort((a,b) => a[1].liab - b[1].liab);
+const tbody = document.getElementById('zip-tbody');
+sorted.forEach(([zip, d]) => {
+  const dom = dominant(d);
+  const liabColor = d.liab < -0.01 ? 'color:var(--green)' : d.liab > 0.01 ? 'color:var(--red)' : 'color:var(--neutral)';
+  tbody.innerHTML += `
+    <tr>
+      <td><span class="zip-tile" style="background:${getColor(d.liab)}"></span><strong>${zip}</strong></td>
+      <td>${d.name}</td>
+      <td>${d.count.toLocaleString()}</td>
+      <td style="${liabColor};font-weight:700;font-size:14px">${fmtLiab(d.liab)}</td>
+      <td>
+        <div class="outcome-bar">
+          <div class="ob-more" style="width:${d.pct_more}%"></div>
+          <div class="ob-less" style="width:${d.pct_less}%"></div>
+          <div class="ob-same" style="width:${d.pct_same}%"></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px">
+          🔴 ${d.pct_more}% &nbsp;🟢 ${d.pct_less}% &nbsp;⚫ ${d.pct_same}%
+        </div>
+      </td>
+      <td><span class="badge ${dom.cls}">${dom.label}</span></td>
+    </tr>`;
+});
+
+loadMap();
+</script>
+</body>
+</html>
